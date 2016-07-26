@@ -4,12 +4,25 @@
 # @date     : 2016-07-21 13:54
 # @email    : rancho941110@gmail.com
 
-'''got all url refer to profile'''
+'''got all seeds refers to Profile
+
+features:
+- unified encoding
+- Lantin and non-Lantin
+- schedule bar
+-
+
+todo:
+- /pub/dir          change pattern
+-
+'''
 
 # from bs4 import BeautifulSoup
 import sys
 import random
 import requests
+
+base = "http://www.linkedin.com/directory/people-"
 
 class RandomAgent(object):
     def __init__(self):
@@ -40,56 +53,89 @@ class RandomAgent(object):
 
 class Directory(object):
     """read directory"""
-    def __init__(self, base):
+    def __init__(self, base, init=1, page=1, line=1, rank=1):
+        # const variable
         self.base = base
         self.split = '-'
-        self.result = []
+        self.pattern = '//*[@id="seo-dir"]/div/div[5]/div/ul//a/@href'
+        self.scan_limit = [26, 100]
+
+        self.url = ''                           # seed url to parse profile refers
+        self.head = {}                          # user-agent
+        self.result = []                        # save profile refers
+        self.index = [init, page, line, rank]
+
+        # aka. -perple-x-x-x, but `Latin` would be -people-x-x-x-x
+        # since then added `rank` circulation internally
 
     def traverse(self):
-        capital = 1
-        while capital <= 26:
-            page = 1
-            while page <= 100:
-                index = 1
-                print "located at %d-%d" % (capital, page)
+        """
+        Lantin:    'people-init-page-line'
+        no-Lantin: 'people-init-page-line-rank'
+        Q: parallel them together
+        """
+        while self.index[0] <= self.scan_limit[0]:
+            while self.index[1] <= self.scan_limit[1]:
+                # info: -init-page
+                print "located at %d-%d" % (self.index[0], self.index[1])
+                while self.index[2] <= self.scan_limit[1]:
+                    # get_page detect continue or break
 
-                while index <= 100:
-                    sub_seq = str(capital), str(page), str(index)   # alse as filename
-                    url = self.base + self.split.join(sub_seq)
+                    # Lantern
+                    while self.index[3] <= self.scan_limit[1]:
+                        # change init from number to alphabet
+                        sub_seq = chr(self.index[0] + 96), str(self.index[1]), str(self.index[2]), str(self.index[3])
+                        self.url = self.base + self.split.join(sub_seq)
+                        if self.get_page(self.url):
+                            self.parse(self.response)
+                            self.printBar(self.index[3])
+                            self.save_tofile()
+                        else:
+                            break
+                        self.index[3] += 1
+                    self.index[3] = 1   # reset
 
-                    self.printBar(index)
-                    # get directory page
-                    head = {}
-                    head['User-Agent'] = RandomAgent().get()
-
-                    response = requests.get(url, headers=head)
-                    if response.status_code == 200:
-                        self.parse(response.content)
-                        self.save_tofile(str(capital))
-                    elif response.status_code == '404':
-                        continue
+                    # non-Lantern
+                    sub_seq = str(self.index[0]), str(self.index[1]), str(self.index[2])
+                    self.url = self.base + self.split.join(sub_seq)
+                    if self.get_page(self.url):
+                        self.parse(self.response)
+                        self.printBar(self.index[2])
+                        self.save_tofile()
                     else:
-                        # write to log
-                        pass
+                        break
+                    self.index[2] += 1
+                self.index[2] = 1       # reset
+                self.index[1] += 1
+            self.index[1] = 1           # reset
+            self.index[0] += 1
 
-                    index += 1
-                    print
-                page += 1
-            capital += 1
-
-    def save_tofile(self, fnm):
-
-        f = open(fnm, 'a+')
-        for item in self.result:
-            if not isinstance(item, unicode):
-                f.write(item)
-                f.write('\n')
-        f.close()
+    def get_page(self, url):
+        self.head['User-Agent'] = RandomAgent().get()
+        self.response = requests.get(self.url, headers=self.head)
+        if self.response.status_code == 200:
+            return True
+        elif self.response.status_code == '404':
+            return None
+        else:
+            # write to log
+            return True
 
     def parse(self, text):
         from lxml import etree
-        selector = etree.HTML(text)
-        self.result = selector.xpath('//*[@id="seo-dir"]/div/div[5]/div/ul//a/@href')
+        selector = etree.HTML(text.content)
+        self.result = selector.xpath(self.pattern)
+
+    def save_tofile(self):
+        f = open('1', 'a+')
+        for item in self.result:
+            if isinstance(item, basestring):
+                f.write(item.encode('utf8'))
+            else:
+                f.write('@@@@@@@@@\n\n\n')
+                f.write(item)
+            f.write('\n')
+        f.close()
 
     def printBar(self, index):
         percent = index / 5
@@ -100,8 +146,5 @@ class Directory(object):
         sys.stdout.flush()
 
 if __name__ == '__main__':
-    base = "http://www.linkedin.com/directory/people-"
     test = Directory(base)
     test.traverse()
-
-    # detect uppper limit
