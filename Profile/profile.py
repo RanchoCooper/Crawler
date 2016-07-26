@@ -14,7 +14,7 @@ features:
 
 todo:
 - /pub/dir          change pattern
--
+- argparse
 '''
 
 # from bs4 import BeautifulSoup
@@ -77,11 +77,11 @@ class Directory(object):
         while self.index[0] <= self.scan_limit[0]:
             while self.index[1] <= self.scan_limit[1]:
                 # info: -init-page
-                print "located at %d-%d" % (self.index[0], self.index[1])
                 while self.index[2] <= self.scan_limit[1]:
                     # get_page detect continue or break
 
                     # Lantern
+                    print self.split.join([chr(self.index[0] + 96), str(self.index[1]), str(self.index[2])])
                     while self.index[3] <= self.scan_limit[1]:
                         # change init from number to alphabet
                         sub_seq = chr(self.index[0] + 96), str(self.index[1]), str(self.index[2]), str(self.index[3])
@@ -96,6 +96,7 @@ class Directory(object):
                     self.index[3] = 1   # reset
 
                     # non-Lantern
+                    print self.split.join([chr(self.index[0]), str(self.index[1])])
                     sub_seq = str(self.index[0]), str(self.index[1]), str(self.index[2])
                     self.url = self.base + self.split.join(sub_seq)
                     if self.get_page(self.url):
@@ -127,9 +128,11 @@ class Directory(object):
         self.result = selector.xpath(self.pattern)
 
     def save_tofile(self):
-        f = open('1', 'a+')
+        f = open('all', 'a+')
         for item in self.result:
-            if isinstance(item, basestring):
+            if isinstance(item, str):
+                f.write(item)
+            elif isinstance(item, unicode):
                 f.write(item.encode('utf8'))
             else:
                 f.write('@@@@@@@@@\n\n\n')
