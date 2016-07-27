@@ -4,26 +4,21 @@
 # @date     : 2016-07-21 13:54
 # @email    : rancho941110@gmail.com
 
-'''got all seeds refers to Profile
+'''fetch all urls refer to Profile
 features:
 - unified encoding
 - Lantin and non-Lantin together
 - schedule bar(little format bugs)
--
+- auto recover
 other: cancle RandomAgent
 
 todo:
-- argparse
 - * using threading
 '''
 
 import sys
 import json
 import requests
-import argparse
-
-parser = argparse.ArgumentParser(description='Fetch all urls refer to profile')
-
 
 class Directory(object):
     """read directory"""
@@ -120,7 +115,6 @@ class Directory(object):
         sys.stdout.write(bar_str)
         sys.stdout.flush()
 
-
 def write_index(data):
     with open('index.json', 'w') as f:
         json.dump(data, f)
@@ -139,4 +133,3 @@ if __name__ == '__main__':
     print "recover from ", last
     test = Directory(last)
     test.traverse()
-    pass
