@@ -5,65 +5,38 @@
 # @email    : rancho941110@gmail.com
 
 '''got all seeds refers to Profile
-
 features:
 - unified encoding
-- Lantin and non-Lantin
-- schedule bar
+- Lantin and non-Lantin together
+- schedule bar(little format bugs)
 -
+other: cancle RandomAgent
 
 todo:
-- /pub/dir          change pattern
 - argparse
+- * using threading
 '''
 
-# from bs4 import BeautifulSoup
 import sys
-import random
+import json
 import requests
+import argparse
 
-base = "http://www.linkedin.com/directory/people-"
+parser = argparse.ArgumentParser(description='Fetch all urls refer to profile')
 
-class RandomAgent(object):
-    def __init__(self):
-        self.user_agent_list = [
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/22.0.1207.1 Safari/537.1",
-            "Mozilla/5.0 (X11; CrOS i686 2268.111.0) AppleWebKit/536.11 (KHTML, like Gecko) Chrome/20.0.1132.57 Safari/536.11",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1092.0 Safari/536.6",
-            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.6 (KHTML, like Gecko) Chrome/20.0.1090.0 Safari/536.6",
-            "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/19.77.34.5 Safari/537.1",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.9 Safari/536.5",
-            "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.36 Safari/536.5",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_0) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1063.0 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1062.0 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1062.0 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.1 Safari/536.3",
-            "Mozilla/5.0 (Windows NT 6.2) AppleWebKit/536.3 (KHTML, like Gecko) Chrome/19.0.1061.0 Safari/536.3",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/535.24 (KHTML, like Gecko) Chrome/19.0.1055.1 Safari/535.24",
-            "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/535.24 (KHTML, like Gecko) Chrome/19.0.1055.1 Safari/535.24"
-        ]
-
-    def get(self):
-        self.useragent = random.choice(self.user_agent_list)
-        return self.useragent
 
 class Directory(object):
     """read directory"""
-    def __init__(self, base, init=1, page=1, line=1, rank=1):
+    def __init__(self, index):
         # const variable
-        self.base = base
+        self.base = 'http://www.linkedin.com/directory/people-'
         self.split = '-'
         self.pattern = '//*[@id="seo-dir"]/div/div[5]/div/ul//a/@href'
-        self.scan_limit = [26, 100]
+        self.limit = [26, 100]
 
         self.url = ''                           # seed url to parse profile refers
-        self.head = {}                          # user-agent
         self.result = []                        # save profile refers
-        self.index = [init, page, line, rank]
+        self.index = index
 
         # aka. -perple-x-x-x, but `Latin` would be -people-x-x-x-x
         # since then added `rank` circulation internally
@@ -74,15 +47,14 @@ class Directory(object):
         no-Lantin: 'people-init-page-line-rank'
         Q: parallel them together
         """
-        while self.index[0] <= self.scan_limit[0]:
-            while self.index[1] <= self.scan_limit[1]:
+        # self.index = load_index()
+        while self.index[0] <= self.limit[0]:
+            while self.index[1] <= self.limit[1]:
                 # info: -init-page
-                while self.index[2] <= self.scan_limit[1]:
-                    # get_page detect continue or break
-
+                while self.index[2] <= self.limit[1]:
                     # Lantern
                     print self.split.join([chr(self.index[0] + 96), str(self.index[1]), str(self.index[2])])
-                    while self.index[3] <= self.scan_limit[1]:
+                    while self.index[3] <= self.limit[1]:
                         # change init from number to alphabet
                         sub_seq = chr(self.index[0] + 96), str(self.index[1]), str(self.index[2]), str(self.index[3])
                         self.url = self.base + self.split.join(sub_seq)
@@ -92,6 +64,7 @@ class Directory(object):
                             self.save_tofile()
                         else:
                             break
+                        write_index(self.index)
                         self.index[3] += 1
                     self.index[3] = 1   # reset
 
@@ -112,8 +85,7 @@ class Directory(object):
             self.index[0] += 1
 
     def get_page(self, url):
-        self.head['User-Agent'] = RandomAgent().get()
-        self.response = requests.get(self.url, headers=self.head)
+        self.response = requests.get(self.url)
         if self.response.status_code == 200:
             return True
         elif self.response.status_code == '404':
@@ -128,7 +100,7 @@ class Directory(object):
         self.result = selector.xpath(self.pattern)
 
     def save_tofile(self):
-        f = open('all', 'a+')
+        f = open('1', 'a+')
         for item in self.result:
             if isinstance(item, str):
                 f.write(item)
@@ -148,6 +120,23 @@ class Directory(object):
         sys.stdout.write(bar_str)
         sys.stdout.flush()
 
+
+def write_index(data):
+    with open('index.json', 'w') as f:
+        json.dump(data, f)
+
+def load_index():
+    """return the list of 4 element loaded from index.json"""
+    re = []
+    with open('index.json', 'r') as f:
+        data = json.load(f)
+    for item in data:
+        re.append(item)
+    return re
+
 if __name__ == '__main__':
-    test = Directory(base)
+    last = load_index()
+    print "recover from ", last
+    test = Directory(last)
     test.traverse()
+    pass
