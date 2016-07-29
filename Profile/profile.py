@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # @author   : Rancho Cooper
-# @date     : 2016-07-21 13:54
+# @date     : 2016-07-29 10:11
 # @email    : rancho941110@gmail.com
 
-'''fetch all urls refer to Profile
+'''获取所有注册用户的主页链接
 features:
-- unified encoding
-- Lantin and non-Lantin together
-- schedule bar(little format bugs)
-- auto recover
-other: cancle RandomAgent
+- 统一编码
+- 不区分数字和字母, 两者同时爬
+- 实时进度条显示, 形象直观
+- 记忆功能, 自动续爬
+其他: 去掉了随机agent(测试发现直接发包没问题)
 
 todo:
-- * using threading
+- * 多线程模型
 '''
 
 import sys
@@ -21,39 +21,43 @@ import json
 import requests
 
 class Directory(object):
-    """read directory"""
+    """遍历目录"""
     def __init__(self, index):
-        # const variable
+        # 一些常量
         self.base = 'http://www.linkedin.com/directory/people-'
         self.split = '-'
         self.pattern = '//*[@id="seo-dir"]/div/div[5]/div/ul//a/@href'
         self.limit = [26, 100]
 
-        self.url = ''                           # seed url to parse profile refers
-        self.result = []                        # save profile refers
+        self.url = ''                           # 发请求包时的url
+        self.result = []                        # 页面解析后含有refer的列表
         self.index = index
-
-        # aka. -perple-x-x-x, but `Latin` would be -people-x-x-x-x
-        # since then added `rank` circulation internally
 
     def traverse(self):
         """
-        Lantin:    'people-init-page-line'
-        no-Lantin: 'people-init-page-line-rank'
-        Q: parallel them together
+        数字和字母的url 分别为 -perple-数字-x-x 和 -people-字母-x-x-x
+        前者三层, 后者有四层, 所以在三层循环框架里加了一层来跑字母
+        字母rank部分遍历完后再就继续遍历数字
+        从发包角度来说, 每请求100页字母目录, 然后请求一页数字目录
+
+        数字开头:    'people-数字-page-line'
+        字母开头:    'people-字母-page-line-rank'
+
+        瓶颈: 开线程池做到并行化
         """
-        # self.index = load_index()
+
         while self.index[0] <= self.limit[0]:
             while self.index[1] <= self.limit[1]:
-                # info: -init-page
                 while self.index[2] <= self.limit[1]:
-                    # Lantern
+                    # 当前进度
                     print self.split.join([chr(self.index[0] + 96), str(self.index[1]), str(self.index[2])])
+                    # 百页字母
                     while self.index[3] <= self.limit[1]:
-                        # change init from number to alphabet
+                        # 数字转字母, 并获取发包所需的url
                         sub_seq = chr(self.index[0] + 96), str(self.index[1]), str(self.index[2]), str(self.index[3])
                         self.url = self.base + self.split.join(sub_seq)
                         if self.get_page(self.url):
+                            # 得到相应页面后的操作, 解析出主页链接并保存
                             self.parse(self.response)
                             self.printBar(self.index[3])
                             self.save_tofile()
@@ -61,22 +65,22 @@ class Directory(object):
                             break
                         write_index(self.index)
                         self.index[3] += 1
-                    self.index[3] = 1   # reset
+                    self.index[3] = 1
 
-                    # non-Lantern
-                    print self.split.join([chr(self.index[0]), str(self.index[1])])
+                    # 一页数字
+                    print self.split.join([str(self.index[0]), str(self.index[1]), str(self.index[2])])
                     sub_seq = str(self.index[0]), str(self.index[1]), str(self.index[2])
                     self.url = self.base + self.split.join(sub_seq)
                     if self.get_page(self.url):
+                        # 得到相应页面后的操作, 解析出主页链接并保存
                         self.parse(self.response)
-                        self.printBar(self.index[2])
                         self.save_tofile()
                     else:
                         break
                     self.index[2] += 1
-                self.index[2] = 1       # reset
+                self.index[2] = 1
                 self.index[1] += 1
-            self.index[1] = 1           # reset
+            self.index[1] = 1
             self.index[0] += 1
 
     def get_page(self, url):
@@ -116,11 +120,12 @@ class Directory(object):
         sys.stdout.flush()
 
 def write_index(data):
+    """当前记录写入json"""
     with open('index.json', 'w') as f:
         json.dump(data, f)
 
 def load_index():
-    """return the list of 4 element loaded from index.json"""
+    """从json导入历史位置"""
     re = []
     with open('index.json', 'r') as f:
         data = json.load(f)
@@ -129,7 +134,7 @@ def load_index():
     return re
 
 if __name__ == '__main__':
-    last = load_index()
+    last = load_index()   # 从json读历史记录, 要指定起始位置可以直接改json
     print "recover from ", last
     test = Directory(last)
     test.traverse()
