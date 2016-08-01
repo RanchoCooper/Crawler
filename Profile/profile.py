@@ -18,12 +18,14 @@ todo:
 
 import sys
 import json
+from time import clock, time
 import requests
 
 class Directory(object):
     """遍历目录"""
     def __init__(self, index):
         # 一些常量
+        Directory.count = 0
         self.base = 'http://www.linkedin.com/directory/people-'
         self.split = '-'
         self.pattern = '//*[@id="seo-dir"]/div/div[5]/div/ul//a/@href'
@@ -61,6 +63,7 @@ class Directory(object):
                             self.parse(self.response)
                             self.printBar(self.index[3])
                             self.save_tofile()
+                            Directory.count += 1
                         else:
                             break
                         write_index(self.index)
@@ -75,6 +78,7 @@ class Directory(object):
                         # 得到相应页面后的操作, 解析出主页链接并保存
                         self.parse(self.response)
                         self.save_tofile()
+                        Directory.count += 1
                     else:
                         break
                     self.index[2] += 1
@@ -133,8 +137,28 @@ def load_index():
         re.append(item)
     return re
 
+def time_info(s):
+    print "CPU time used: %10.5f" % clock()
+    print "running time : %10.5f " % (time() - s)
+
+def fetch_info():
+    print "page had GET : %10d" % Directory.count
+
 if __name__ == '__main__':
-    last = load_index()   # 从json读历史记录, 要指定起始位置可以直接改json
-    print "recover from ", last
-    test = Directory(last)
-    test.traverse()
+    start = time()
+    while True:
+        try:
+            origin = load_index()   # 从json读历史记录, 要指定起始位置可以直接改json
+            print "recover from ", origin
+            test = Directory(origin)
+            test.traverse()
+        except requests.exceptions.ConnectionError, e:
+            print "\n\nWRONG: %s" % e
+            print "continue..."
+            continue
+        except KeyboardInterrupt:
+            print "\n\n\n"
+            current = load_index()
+            time_info(start)
+            fetch_info()
+            exit()
