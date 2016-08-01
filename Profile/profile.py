@@ -137,12 +137,17 @@ def load_index():
         re.append(item)
     return re
 
-def time_info(s):
-    print "CPU time used: %10.5f" % clock()
-    print "running time : %10.5f " % (time() - s)
+def timelogging(func):
+    def wrapper():
+        print "CPU time used: %10.5f" % clock()
+        print "running time : %10.5f " % (time() - start)
+        print "page had GET : %10d" % Directory.count
+        return func()
+    return wrapper
 
-def fetch_info():
-    print "page had GET : %10d" % Directory.count
+@timelogging
+def quit():
+    sys.exit()
 
 if __name__ == '__main__':
     start = time()
@@ -159,6 +164,4 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             print "\n\n\n"
             current = load_index()
-            time_info(start)
-            fetch_info()
-            exit()
+            quit()
