@@ -18,8 +18,33 @@ todo:
 
 import sys
 import json
-from time import clock, time
+import Queue
 import requests
+import threading
+from time import clock, time
+
+_WORK_THREAD_NUM = 5        # 设置线程个数
+_MAX_QUEUE_SIZE  = 20       # 设置队列大小
+
+class WorkQueue(object):
+    """为获取页面提供一个先入先出的工作队列"""
+    def __init__(self, size):
+        self.size = size
+        self.queue = Queue.Queue(maxsize=size)
+        self.flag = False   # 队满标志
+
+class Schedule(object):
+    """调度器, 控制线程的执行"""
+    def __init__(self, size):
+        self.full = False       # 满标志
+        self.empty = False      # 空标志
+        self.current = 0        # 当前执行数
+        self._MAX    = 5        # 最大执行数
+        pass
+
+    def work(self, func, *args):
+        """任务执行"""
+        pass
 
 class Directory(object):
     """遍历目录"""
@@ -34,6 +59,26 @@ class Directory(object):
         self.url = ''                           # 发请求包时的url
         self.result = []                        # 页面解析后含有refer的列表
         self.index = index
+
+        self.generator = ([i, p, l, r]
+                            for i in xrange(1, 27)
+                            for p in xrange(1, 101)
+                            for l in xrange(1, 101)
+                            for r in xrange(1, 101))
+
+    def workding(self, sub):
+        """线程执行的target"""
+        url = self.base + sub       # change
+        print "fetch url: ", url
+        pass
+
+    def prepare(self):
+        while True:
+            g = list(self.generator.next())
+            print "current g", g
+            if g == self.index:
+                break
+        print "now next is ", self.generator.next()
 
     def traverse(self):
         """
@@ -157,6 +202,7 @@ if __name__ == '__main__':
             print "recover from ", origin
             test = Directory(origin)
             test.traverse()
+            # test.testing()
         except requests.exceptions.ConnectionError, e:
             print "\n\nWRONG: %s" % e
             print "continue..."
