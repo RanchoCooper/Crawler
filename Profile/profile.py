@@ -10,6 +10,8 @@ features:
 - 不区分数字和字母, 两者同时爬
 - 实时进度条显示, 形象直观
 - 记忆功能, 自动续爬
+
+- 08.08生成器代替while循环
 其他: 去掉了随机agent(测试发现直接发包没问题)
 
 todo:
@@ -18,119 +20,63 @@ todo:
 
 import sys
 import json
-import Queue
 import requests
-import threading
-from time import clock, time
-
-_WORK_THREAD_NUM = 5        # 设置线程个数
-_MAX_QUEUE_SIZE  = 20       # 设置队列大小
-
-class WorkQueue(object):
-    """为获取页面提供一个先入先出的工作队列"""
-    def __init__(self, size):
-        self.size = size
-        self.queue = Queue.Queue(maxsize=size)
-        self.flag = False   # 队满标志
-
-class Schedule(object):
-    """调度器, 控制线程的执行"""
-    def __init__(self, size):
-        self.full = False       # 满标志
-        self.empty = False      # 空标志
-        self.current = 0        # 当前执行数
-        self._MAX    = 5        # 最大执行数
-        pass
-
-    def work(self, func, *args):
-        """任务执行"""
-        pass
+from time import clock
+from timeit import default_timer
+from itertools import dropwhile
 
 class Directory(object):
     """遍历目录"""
     def __init__(self, index):
         # 一些常量
-        Directory.count = 0
         self.base = 'http://www.linkedin.com/directory/people-'
         self.split = '-'
         self.pattern = '//*[@id="seo-dir"]/div/div[5]/div/ul//a/@href'
-        self.limit = [26, 100]
+        self.sub = []
+        self.count = 0                          # 记录发包次数
+        self.alphabet = [i for i in range(1, 27)]
+        self.numrange = [i for i in range(1, 101)]
 
+        # share lock!
         self.url = ''                           # 发请求包时的url
         self.result = []                        # 页面解析后含有refer的列表
         self.index = index
 
-        self.generator = ([i, p, l, r]
-                            for i in xrange(1, 27)
-                            for p in xrange(1, 101)
-                            for l in xrange(1, 101)
-                            for r in xrange(1, 101))
+    # 用生成器代替原有的while循环
+    # 新特性: 代理迭代, 迭代目录与发包请求异步进行
+    # 不变特性: 自动恢复(迭代跃进), 终止检测(需要bool flag配合来完成)
+    def generator(self):
+        for init in self.alphabet:
+            for page in self.numrange:
+                for line in self.numrange:
+                    for rank in self.numrange:
+                        lan_item = init, page, line, rank
+                        yield lan_item
+                    non_item = init, page, line
+                    yield non_item
 
-    def workding(self, sub):
-        """线程执行的target"""
-        url = self.base + sub       # change
-        print "fetch url: ", url
-        pass
+    def start_traverse(self):
+        history = tuple(self.index)
+        gen = self.generator()
+        for sub in dropwhile(lambda sub: sub != history, gen):
+            self.sub = sub
+            write_index(sub)
+            # sleep(0.01)
+            if len(sub) == 4:
+                sub = list(sub)
+                sub[0] = chr(sub[0] + 96)
 
-    def prepare(self):
-        while True:
-            g = list(self.generator.next())
-            print "current g", g
-            if g == self.index:
-                break
-        print "now next is ", self.generator.next()
-
-    def traverse(self):
-        """
-        数字和字母的url 分别为 -perple-数字-x-x 和 -people-字母-x-x-x
-        前者三层, 后者有四层, 所以在三层循环框架里加了一层来跑字母
-        字母rank部分遍历完后再就继续遍历数字
-        从发包角度来说, 每请求100页字母目录, 然后请求一页数字目录
-
-        数字开头:    'people-数字-page-line'
-        字母开头:    'people-字母-page-line-rank'
-
-        瓶颈: 开线程池做到并行化
-        """
-
-        while self.index[0] <= self.limit[0]:
-            while self.index[1] <= self.limit[1]:
-                while self.index[2] <= self.limit[1]:
-                    # 当前进度
-                    print self.split.join([chr(self.index[0] + 96), str(self.index[1]), str(self.index[2])])
-                    # 百页字母
-                    while self.index[3] <= self.limit[1]:
-                        # 数字转字母, 并获取发包所需的url
-                        sub_seq = chr(self.index[0] + 96), str(self.index[1]), str(self.index[2]), str(self.index[3])
-                        self.url = self.base + self.split.join(sub_seq)
-                        if self.get_page(self.url):
-                            # 得到相应页面后的操作, 解析出主页链接并保存
-                            self.parse(self.response)
-                            self.printBar(self.index[3])
-                            self.save_tofile()
-                            Directory.count += 1
-                        else:
-                            break
-                        write_index(self.index)
-                        self.index[3] += 1
-                    self.index[3] = 1
-
-                    # 一页数字
-                    print self.split.join([str(self.index[0]), str(self.index[1]), str(self.index[2])])
-                    sub_seq = str(self.index[0]), str(self.index[1]), str(self.index[2])
-                    self.url = self.base + self.split.join(sub_seq)
-                    if self.get_page(self.url):
-                        # 得到相应页面后的操作, 解析出主页链接并保存
-                        self.parse(self.response)
-                        self.save_tofile()
-                        Directory.count += 1
-                    else:
-                        break
-                    self.index[2] += 1
-                self.index[2] = 1
-                self.index[1] += 1
-            self.index[1] = 1
-            self.index[0] += 1
+            # GET PAGE
+            current = sub[-1]
+            self.url = self.base + self.split.join(list(map(lambda x: str(x), sub)))
+            print self.url
+            # push to work queue
+            if self.get_page(self.url):
+                # 得到相应页面后的操作, 解析出主页链接并保存
+                self.count += 1         # 统计发包数(不计404)
+                self.parse(self.response)
+                self.printBar(current)
+                self.save_tofile()
 
     def get_page(self, url):
         self.response = requests.get(self.url)
@@ -148,23 +94,22 @@ class Directory(object):
         self.result = selector.xpath(self.pattern)
 
     def save_tofile(self):
-        f = open('1', 'a+')
-        for item in self.result:
-            if isinstance(item, str):
-                f.write(item)
-            elif isinstance(item, unicode):
-                f.write(item.encode('utf8'))
-            else:
-                f.write('@@@@@@@@@\n\n\n')
-                f.write(item)
-            f.write('\n')
-        f.close()
+        with open('1', 'a+') as f:
+            for item in self.result:
+                if isinstance(item, str):
+                    f.write(item)
+                elif isinstance(item, unicode):
+                    f.write(item.encode('utf8'))
+                else:
+                    f.write('@@@@@@@@@\n\n\n')
+                    f.write(item)
+                f.write('\n')
 
-    def printBar(self, index):
-        percent = index / 5
+    def printBar(self, current):
+        percent = current / 5
         bar_str = '[' + '#' * percent + ' ' * (20 - percent) + ']' + '\r'
 
-        sys.stdout.write(str(index))
+        sys.stdout.write(str(current))
         sys.stdout.write(bar_str)
         sys.stdout.flush()
 
@@ -184,9 +129,18 @@ def load_index():
 
 def timelogging(func):
     def wrapper():
-        print "CPU time used: %10.5f" % clock()
-        print "running time : %10.5f " % (time() - start)
-        print "page had GET : %10d" % Directory.count
+        c = clock()
+        r = default_timer() - start
+        iotime = (1 - c / r) * 100
+        print "CPU time used: %20.3f"     % c
+        print "PRO time used: %20.3f "    % r
+        print "IO  time used: %20.3f %%"  % iotime
+        if test.count:
+            petime = test.count / r
+            print "Requests page: %20d"       % test.count
+            print "Average %20.5f Page per sec" % petime
+        print
+        print "exit, see you..."
         return func()
     return wrapper
 
@@ -195,19 +149,19 @@ def quit():
     sys.exit()
 
 if __name__ == '__main__':
-    start = time()
+    start = default_timer()
     while True:
         try:
             origin = load_index()   # 从json读历史记录, 要指定起始位置可以直接改json
             print "recover from ", origin
             test = Directory(origin)
-            test.traverse()
-            # test.testing()
+            test.start_traverse()
         except requests.exceptions.ConnectionError, e:
             print "\n\nWRONG: %s" % e
             print "continue..."
             continue
         except KeyboardInterrupt:
             print "\n\n\n"
+            write_index(test.sub)
             current = load_index()
             quit()
