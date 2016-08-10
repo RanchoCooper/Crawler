@@ -11,6 +11,7 @@ features:
 - 实时进度条显示, 形象直观
 - 记忆功能, 自动续爬
 
+- 08.10优化日志信息
 - 08.08生成器代替while循环
 其他: 去掉了随机agent(测试发现直接发包没问题)
 
@@ -23,6 +24,7 @@ import json
 import requests
 from time import clock
 from timeit import default_timer
+from datetime import datetime
 from itertools import dropwhile
 
 class Directory(object):
@@ -41,6 +43,7 @@ class Directory(object):
         self.url = ''                           # 发请求包时的url
         self.result = []                        # 页面解析后含有refer的列表
         self.index = index
+        # self.flag = False                       # 目录尾部404标志
 
     # 用生成器代替原有的while循环
     # 新特性: 代理迭代, 迭代目录与发包请求异步进行
@@ -49,11 +52,14 @@ class Directory(object):
         for init in self.alphabet:
             for page in self.numrange:
                 for line in self.numrange:
+                    non_item = init, page, line
+                    yield non_item
                     for rank in self.numrange:
                         lan_item = init, page, line, rank
                         yield lan_item
-                    non_item = init, page, line
-                    yield non_item
+                        # if self.flag:
+                        #     line += 1
+                        #     break
 
     def start_traverse(self):
         history = tuple(self.index)
@@ -68,25 +74,28 @@ class Directory(object):
 
             # GET PAGE
             current = sub[-1]
-            self.url = self.base + self.split.join(list(map(lambda x: str(x), sub)))
-            print self.url
+            str_sub = map(lambda x: str(x), sub)
+            self.url = self.base + self.split.join(str_sub)
             # push to work queue
             if self.get_page(self.url):
                 # 得到相应页面后的操作, 解析出主页链接并保存
-                self.count += 1         # 统计发包数(不计404)
                 self.parse(self.response)
-                self.printBar(current)
                 self.save_tofile()
+                self.count += 1         # 统计发包数(不计404)
+                print self.url          # 打印已存好的 url
+                self.printBar(str_sub, current)
+            else:
+                continue
 
     def get_page(self, url):
         self.response = requests.get(self.url)
         if self.response.status_code == 200:
             return True
         elif self.response.status_code == '404':
-            return None
+            return False
         else:
             # write to log
-            return True
+            return False
 
     def parse(self, text):
         from lxml import etree
@@ -101,15 +110,17 @@ class Directory(object):
                 elif isinstance(item, unicode):
                     f.write(item.encode('utf8'))
                 else:
-                    f.write('@@@@@@@@@\n\n\n')
-                    f.write(item)
+                    print "@@@@@@@@@\n\n\ncan't encode!!!"
+                    raise UnicodeEncodeError
                 f.write('\n')
 
-    def printBar(self, current):
+    def printBar(self, pre, current):
         percent = current / 5
+        print " " * 18,
+        print self.split.join(pre),
         bar_str = '[' + '#' * percent + ' ' * (20 - percent) + ']' + '\r'
 
-        sys.stdout.write(str(current))
+        # sys.stdout.write(str(current))
         sys.stdout.write(bar_str)
         sys.stdout.flush()
 
@@ -129,16 +140,20 @@ def load_index():
 
 def timelogging(func):
     def wrapper():
+        s = (edate - sdate).total_seconds()
         c = clock()
         r = default_timer() - start
-        iotime = (1 - c / r) * 100
-        print "CPU time used: %20.3f"     % c
-        print "PRO time used: %20.3f "    % r
-        print "IO  time used: %20.3f %%"  % iotime
+        p = (1 - c / r) * 100
+        print "START at %32s"               % sdate
+        print "ENDED at %32s"               % edate
+        print "RUN time used: %26.3f"       % s
+        print "PRO time used: %26.3f "      % r
+        print "CPU time used: %26.3f"       % c
+        print "IO  time used: %25.3f%%"     % p
         if test.count:
             petime = test.count / r
-            print "Requests page: %20d"       % test.count
-            print "Average %20.5f Page per sec" % petime
+            print "Requests page: %26d"     % test.count
+            print "Average  rate: %24.3f/s" % petime
         print
         print "exit, see you..."
         return func()
@@ -150,6 +165,7 @@ def quit():
 
 if __name__ == '__main__':
     start = default_timer()
+    sdate = datetime.now()
     while True:
         try:
             origin = load_index()   # 从json读历史记录, 要指定起始位置可以直接改json
@@ -157,11 +173,17 @@ if __name__ == '__main__':
             test = Directory(origin)
             test.start_traverse()
         except requests.exceptions.ConnectionError, e:
-            print "\n\nWRONG: %s" % e
+            print "WRONG: ", e
             print "continue..."
             continue
-        except KeyboardInterrupt:
+        except requests.exceptions.ReadTimeout, e:
+            print "WRONG: ", e
+            print "continue..."
+            continue
+        except BaseException, e:    # 遇到新异常打印日志并退出
+            print "NEW ERROR: ", e
+        finally:
+            edate = datetime.now()
             print "\n\n\n"
             write_index(test.sub)
-            current = load_index()
             quit()
